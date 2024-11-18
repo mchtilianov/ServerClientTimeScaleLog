@@ -1,0 +1,1 @@
+INSERT INTO message_log (time, topic, message) VALUES (NOW(), @topic, @message);
