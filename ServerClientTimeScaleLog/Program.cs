@@ -17,6 +17,7 @@ for (int i = 0; i < 10; i++)
 }
 
 var logClient = new LogClient();
+await logClient.InitLogClient();
 await logClient.Connect();
 await logClient.Subscribe_Topic();
 

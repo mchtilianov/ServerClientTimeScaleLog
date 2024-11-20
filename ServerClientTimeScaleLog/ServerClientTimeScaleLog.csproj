@@ -14,4 +14,16 @@
       <PackageReference Include="Npgsql" Version="8.0.5" />
     </ItemGroup>
 
+    <ItemGroup>
+      <None Update="SqlQueries\CreateLogTable.sql">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="SqlQueries\EnsureTimeScaleExtension.sql">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="SqlQueries\UpdateTable.sql">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
 </Project>

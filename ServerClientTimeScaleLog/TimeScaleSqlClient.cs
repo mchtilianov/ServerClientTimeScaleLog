@@ -5,53 +5,46 @@ using Npgsql;
 
 public class TimeScaleSqlClient
 {
-    string connectionString;
-    private NpgsqlConnection connection;
+    string _connectionString;
+    NpgsqlConnection _connection;
 
     public TimeScaleSqlClient()
     {
         using ILoggerFactory factory = LoggerFactory.Create(builder => builder.AddConsole());
         NpgsqlLoggingConfiguration.InitializeLogging(factory, parameterLoggingEnabled: true);
-        connectionString = "Host=localhost;Port=5432;Database=timescale_test;User Id=postgres;Password=password;";
-        connection = new NpgsqlConnection(connectionString);
+        _connectionString = "Host=localhost;Port=5432;Database=timescale_test;User Id=postgres;Password=password;";
+        _connection = new NpgsqlConnection(_connectionString);
     }
 
-    public void OpenConnection()
+    public async Task OpenConnection()
     {
-        connection.Open();
+        await _connection.OpenAsync();
     }
 
-    public void CloseConnection()
+    public async Task CloseConnection()
     {
-        connection.Close();
+        await _connection.CloseAsync();
     }
 
-    public void CreateMessageLogTable()
+    public async Task CreateMessageLogTable()
     {
-        string ensureExtensionCmd = File.ReadAllText("/home/martin/RiderProjects/ServerClientTimeScaleLog/ServerClientTimeScaleLog/SqlQueries/EnsureTimeScaleExtension.sql");
-        using NpgsqlCommand cmdEnsureExtension = new NpgsqlCommand(ensureExtensionCmd, connection);
-        cmdEnsureExtension.ExecuteNonQuery();
+        string ensureExtensionCmd = await File.ReadAllTextAsync("./SqlQueries/EnsureTimeScaleExtension.sql");
+        await using NpgsqlCommand cmdEnsureExtension = new NpgsqlCommand(ensureExtensionCmd, _connection);
+        await cmdEnsureExtension.ExecuteNonQueryAsync();
         
-        string createMessageLogTableCmd = File.ReadAllText("/home/martin/RiderProjects/ServerClientTimeScaleLog/ServerClientTimeScaleLog/SqlQueries/CreateLogTable.sql");
-        using NpgsqlCommand cmdCreateMessageLogTable = new NpgsqlCommand(createMessageLogTableCmd, connection);
-        cmdCreateMessageLogTable.ExecuteNonQuery();
+        string createMessageLogTableCmd = await File.ReadAllTextAsync("./SqlQueries/CreateLogTable.sql");
+        await using NpgsqlCommand cmdCreateMessageLogTable = new NpgsqlCommand(createMessageLogTableCmd, _connection);
+        await cmdCreateMessageLogTable.ExecuteNonQueryAsync();
     }
 
-    public void InsertData(string topic, string message)
+    public async Task InsertData(string topic, string message)
     {
-        string updateTableCmd = File.ReadAllText("/home/martin/RiderProjects/ServerClientTimeScaleLog/ServerClientTimeScaleLog/SqlQueries/UpdateTable.sql");
-        using NpgsqlCommand cmdUpdateTable = new NpgsqlCommand(updateTableCmd, connection);
+        string updateTableCmd = await File.ReadAllTextAsync("./SqlQueries/UpdateTable.sql");
+        await using NpgsqlCommand cmdUpdateTable = new NpgsqlCommand(updateTableCmd, _connection);
         
         cmdUpdateTable.Parameters.AddWithValue("topic", topic);
         cmdUpdateTable.Parameters.AddWithValue("message", message);
-
         
-        Console.WriteLine(cmdUpdateTable.CommandText + " --- " + topic + " -- " + message);
-        foreach (NpgsqlParameter parameter in cmdUpdateTable.Parameters)
-        {
-            Console.WriteLine($"Parameter: {parameter.ParameterName}, Value: {parameter.Value}");
-        }
-        
-        Console.WriteLine(cmdUpdateTable.ExecuteNonQuery());
+        await cmdUpdateTable.ExecuteNonQueryAsync();
     }
 }
