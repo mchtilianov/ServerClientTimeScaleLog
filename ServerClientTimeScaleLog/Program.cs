@@ -27,5 +27,5 @@ while (true)
     {
         await clients[i].Publish();
     }
-    await Task.Delay(500);
+    await Task.Delay(50);
 }
