@@ -59,12 +59,6 @@ public class LogClient
         // Define the handler for incoming messages
         _mqttClient.ApplicationMessageReceivedAsync += async e =>
         {
-            var message = e.ApplicationMessage.PayloadSegment.ToArray();
-
-            message.DumpToConsole();
-            
-            await _timeScaleSqlClient.InsertData(e.ApplicationMessage.Topic , message);
-
             string matchedTopic = "";
             
             // Find matching wildcard topic
@@ -74,17 +68,25 @@ public class LogClient
                 {
                     matchedTopic = wildcardTopic;
                     
-                    _topicMessageCount[wildcardTopic] += 1;
                     Console.WriteLine($"Matched {e.ApplicationMessage.Topic} with {wildcardTopic} <---> {_topicMessageCount[wildcardTopic]}  <---> {_topicToUnsubscribeCount[wildcardTopic]}");
                     
+                    _topicMessageCount[wildcardTopic] += 1;
                     break;
                 }
             }
-            Console.WriteLine($"Matched topic: {matchedTopic}");
+            
             if (_topicToUnsubscribeCount[matchedTopic] != -1 && 
-                _topicMessageCount[matchedTopic] >= _topicToUnsubscribeCount[matchedTopic])
+                (_topicMessageCount[matchedTopic] - 1) >= _topicToUnsubscribeCount[matchedTopic])
             {
                 await Unsubscribe_Topic(matchedTopic);
+            }
+            else
+            {
+                var message = e.ApplicationMessage.PayloadSegment.ToArray();
+
+                message.DumpToConsole();
+            
+                await _timeScaleSqlClient.InsertData(e.ApplicationMessage.Topic , message);   
             }
         };
     }
