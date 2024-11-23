@@ -1,4 +1,3 @@
-using System.Text;
 using MQTTnet;
 using MQTTnet.Client;
 
@@ -10,10 +9,13 @@ public class LogClient
     MqttFactory _clientFactory;
     MqttClientOptions _mqttClientOptions;
     string _clientId;
+    List<string> _topics;
+    Dictionary<string, int> _topicToUnsubscribeCount;
+    Dictionary<string, int> _topicMessageCount;
 
     private TimeScaleSqlClient _timeScaleSqlClient;
     
-    public LogClient()
+    public LogClient(string tcpUrl, int tcpPort)
     {
         _clientFactory = new MqttFactory();
         _mqttClient = _clientFactory.CreateMqttClient();
@@ -21,10 +23,32 @@ public class LogClient
         
         _mqttClientOptions = new MqttClientOptionsBuilder()
             .WithClientId(_clientId)
-            .WithTcpServer("localhost")
+            .WithTcpServer(tcpUrl, tcpPort)
             .Build();
 
         _timeScaleSqlClient = new TimeScaleSqlClient();
+        
+        _topics = new List<string>();
+        _topicToUnsubscribeCount = new Dictionary<string, int>();
+        _topicMessageCount = new Dictionary<string, int>();
+    }
+    
+    public LogClient(string tcpUrl, int tcpPort, TimeScaleSqlClientOptions options)
+    {
+        _clientFactory = new MqttFactory();
+        _mqttClient = _clientFactory.CreateMqttClient();
+        _clientId = "DummyClient" + Guid.NewGuid();
+        
+        _mqttClientOptions = new MqttClientOptionsBuilder()
+            .WithClientId(_clientId)
+            .WithTcpServer(tcpUrl, tcpPort)
+            .Build();
+
+        _timeScaleSqlClient = new TimeScaleSqlClient(options);
+        
+        _topics = new List<string>();
+        _topicToUnsubscribeCount = new Dictionary<string, int>();
+        _topicMessageCount = new Dictionary<string, int>();
     }
 
     public async Task InitLogClient()
@@ -35,10 +59,33 @@ public class LogClient
         // Define the handler for incoming messages
         _mqttClient.ApplicationMessageReceivedAsync += async e =>
         {
-            // Decode and log the message
-            var message = Encoding.UTF8.GetString(e.ApplicationMessage.PayloadSegment);
+            var message = e.ApplicationMessage.PayloadSegment.ToArray();
+
+            message.DumpToConsole();
             
             await _timeScaleSqlClient.InsertData(e.ApplicationMessage.Topic , message);
+
+            string matchedTopic = "";
+            
+            // Find matching wildcard topic
+            foreach (var wildcardTopic in _topics)
+            {
+                if (IsMatch(wildcardTopic, e.ApplicationMessage.Topic))
+                {
+                    matchedTopic = wildcardTopic;
+                    
+                    _topicMessageCount[wildcardTopic] += 1;
+                    Console.WriteLine($"Matched {e.ApplicationMessage.Topic} with {wildcardTopic} <---> {_topicMessageCount[wildcardTopic]}  <---> {_topicToUnsubscribeCount[wildcardTopic]}");
+                    
+                    break;
+                }
+            }
+            Console.WriteLine($"Matched topic: {matchedTopic}");
+            if (_topicToUnsubscribeCount[matchedTopic] != -1 && 
+                _topicMessageCount[matchedTopic] >= _topicToUnsubscribeCount[matchedTopic])
+            {
+                await Unsubscribe_Topic(matchedTopic);
+            }
         };
     }
     
@@ -55,15 +102,76 @@ public class LogClient
         await _mqttClient.DisconnectAsync();
     }
     
-    public async Task Subscribe_Topic()
+    public async Task Subscribe_Topic(string topic, int unsubscribeAfter = -1)
     {
-        var mqttSubscribeOptions = _clientFactory.CreateSubscribeOptionsBuilder().WithTopicFilter("#").Build();
+        var mqttSubscribeOptions = _clientFactory.CreateSubscribeOptionsBuilder().WithTopicFilter(topic).Build();
 
         var response = await _mqttClient.SubscribeAsync(mqttSubscribeOptions);
 
-        Console.WriteLine("MQTT client subscribed to topic.");
+        Console.WriteLine($"MQTT client subscribed to {topic}.");
+        
+        _topics.Add(topic);
+        _topicToUnsubscribeCount.Add(topic, unsubscribeAfter);
+        _topicMessageCount.Add(topic, 0);
 
         // The response contains additional data sent by the server after subscribing.
         response.DumpToConsole();
+    }
+    
+    // In case you have a bunch of topics where you don't care about automatically unsubscribing from
+    public async Task Subscribe_Topics(List<string> topics)
+    {
+        foreach (var topic in topics)
+        {
+            await Subscribe_Topic(topic);
+        }
+    }
+    
+    // In case you care about automatically unsubscribing from a bunch of topics
+    public async Task Subscribe_Topics(List<(string, int)> topics)
+    {
+        foreach (var topic in topics)
+        {
+            await Subscribe_Topic(topic.Item1, topic.Item2);
+        }
+    }
+    
+    // Manual unsubscribing also exposed to users
+    public async Task<bool> Unsubscribe_Topic(string topic)
+    {
+        if (_topics.Contains(topic))
+        {
+            await _mqttClient.UnsubscribeAsync(topic);
+            
+            _topics.Remove(topic);
+            _topicMessageCount.Remove(topic);
+            _topicToUnsubscribeCount.Remove(topic);
+            
+            Console.WriteLine($"MQTT client unsubscribed to {topic}.");
+            
+            return true;
+        }
+        return false;
+    }
+    
+    private static bool IsMatch(string wildcardTopic, string actualTopic)
+    {
+        string[] wildcardLevels = wildcardTopic.Split('/');
+        string[] topicLevels = actualTopic.Split('/');
+
+        int i = 0;
+        for (; i < wildcardLevels.Length; i++)
+        {
+            if (wildcardLevels[i] == "#")
+            {
+                return true;
+            }
+            if (i >= topicLevels.Length || (wildcardLevels[i] != "+" && wildcardLevels[i] != topicLevels[i]))
+            {
+                return false;
+            }
+        }
+
+        return i == topicLevels.Length;
     }
 }

@@ -2,30 +2,12 @@
 
 using ServerClientTimeScaleLog;
 
-Console.WriteLine("Hello, World!");
-
-var server = new Server();
-await server.StartServer();
-
-Console.WriteLine("We're starting up...");
-
-List<DummyClient> clients = new List<DummyClient>();
-for (int i = 0; i < 10; i++)
-{
-    clients.Add(new DummyClient());
-    await clients[i].Connect();
-}
-
-var logClient = new LogClient();
+var logClient = new LogClient("test.mosquitto.org", 1883);
 await logClient.InitLogClient();
 await logClient.Connect();
-await logClient.Subscribe_Topic();
+// Subscribe to as many topics as you'd like just add more logClient.Subscribe_Topic
+await logClient.Subscribe_Topic("#", 10);
 
-while (true)
-{
-    for (int i = 0; i < 10; i++)
-    {
-        await clients[i].Publish();
-    }
-    await Task.Delay(50);
-}
+
+// Due to the nature of async/await if we don't add an infinite delay at the end of the program, the program exits
+await Task.Delay(-1);

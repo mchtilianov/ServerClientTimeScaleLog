@@ -20,7 +20,7 @@ DO $$
             CREATE TABLE message_log (
                                       time TIMESTAMPTZ NOT NULL,
                                       topic text,
-                                      message text
+                                      message bytea
             );
             PERFORM create_hypertable('message_log', 'time');
         END IF;
