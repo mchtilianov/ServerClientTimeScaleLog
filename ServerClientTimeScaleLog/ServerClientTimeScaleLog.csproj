@@ -15,6 +15,10 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\MqttTrace\MqttTrace.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
       <None Update="SqlQueries\CreateLogTable.sql">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>

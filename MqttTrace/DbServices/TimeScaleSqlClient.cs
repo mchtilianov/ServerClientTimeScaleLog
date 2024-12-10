@@ -1,14 +1,19 @@
-namespace ServerClientTimeScaleLog;
+namespace MqttTrace.DbServices;
 
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Npgsql;
+using Proton.Dto;
+using System.Reflection;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 public class TimeScaleSqlClientOptions(
-    string? host = "localhost",
+    string? host = "chiloff.com",
     string? database = "timescale_test",
-    string? port = "5432",
+    string? port = "15432",
     string? userId = "postgres",
-    string? password = "password")
+    string? password = "Pa333556580rd")
 {
     public string? Host { get; set; } = host;
     public string? Database { get; set; } = database;
@@ -19,18 +24,20 @@ public class TimeScaleSqlClientOptions(
 
 public class TimeScaleSqlClient
 {
+    string libraryPath = Assembly.GetExecutingAssembly().Location;
     string _connectionString;
     NpgsqlConnection _connection;
 
-    public TimeScaleSqlClient(string host = "localhost", string database = "timescale_test", string port = "5432",
-                              string userId = "postgres", string password = "password")
+    //Host=chiloff.com;Port=15432;Database=timescale_test;User Id=postgres;Password=Pa333556580rd;
+    public TimeScaleSqlClient(string host = "chiloff.com", string database = "timescale_test", string port = "15432",
+                              string userId = "postgres", string password = "Pa333556580rd")
     {
         using ILoggerFactory factory = LoggerFactory.Create(builder => builder.AddConsole());
         NpgsqlLoggingConfiguration.InitializeLogging(factory, parameterLoggingEnabled: true);
         _connectionString = $"Host={host};Port={port};Database={database};User Id={userId};Password={password};";
         _connection = new NpgsqlConnection(_connectionString);
     }
-    
+
     public TimeScaleSqlClient(TimeScaleSqlClientOptions options)
     {
         using ILoggerFactory factory = LoggerFactory.Create(builder => builder.AddConsole());
@@ -41,6 +48,7 @@ public class TimeScaleSqlClient
 
     public async Task OpenConnection()
     {
+        Console.WriteLine(libraryPath);
         await _connection.OpenAsync();
     }
 
@@ -54,7 +62,7 @@ public class TimeScaleSqlClient
         string ensureExtensionCmd = await File.ReadAllTextAsync("./SqlQueries/EnsureTimeScaleExtension.sql");
         await using NpgsqlCommand cmdEnsureExtension = new NpgsqlCommand(ensureExtensionCmd, _connection);
         await cmdEnsureExtension.ExecuteNonQueryAsync();
-        
+
         string createMessageLogTableCmd = await File.ReadAllTextAsync("./SqlQueries/CreateLogTable.sql");
         await using NpgsqlCommand cmdCreateMessageLogTable = new NpgsqlCommand(createMessageLogTableCmd, _connection);
         await cmdCreateMessageLogTable.ExecuteNonQueryAsync();
@@ -64,10 +72,33 @@ public class TimeScaleSqlClient
     {
         string updateTableCmd = await File.ReadAllTextAsync("./SqlQueries/UpdateTable.sql");
         await using NpgsqlCommand cmdUpdateTable = new NpgsqlCommand(updateTableCmd, _connection);
-        
+
         cmdUpdateTable.Parameters.AddWithValue("topic", topic);
         cmdUpdateTable.Parameters.AddWithValue("message", message);
-        
+
         Console.WriteLine(await cmdUpdateTable.ExecuteNonQueryAsync());
+    }
+
+    public async Task SellectAllData()
+    {
+        string updateTableCmd = await File.ReadAllTextAsync("./SqlQueries/SelectAllMessages.sql");
+        using NpgsqlCommand command = new NpgsqlCommand(updateTableCmd, _connection);
+
+        NpgsqlDataReader reader = await command.ExecuteReaderAsync();
+        int i = 0;
+        while (await reader.ReadAsync())
+        {
+            Console.WriteLine(reader[0]);
+            Console.WriteLine(reader[1]);
+            var a = reader[2] as byte[];
+            // Console.WriteLine(Payload.Parser.ParseFrom(a));
+            // var b = Payload.Parser.ParseFrom(a).GetType().GetProperties();
+            string jsonString = System.Text.Encoding.Default.GetString(reader[2] as byte[] ?? []);
+            dynamic json = JsonConvert.DeserializeObject(jsonString);
+            Console.WriteLine(json["Payload"]);
+            TippingDto tip = JsonConvert.DeserializeObject<TippingDto>(json["Payload"].ToString());
+
+            Console.WriteLine("----------------------------------------");
+        }
     }
 }

@@ -4,7 +4,7 @@
 
 using System.Text.Json;
 
-namespace ServerClientTimeScaleLog;
+namespace MqttTrace;
 
 internal static class ObjectExtensions
 {
@@ -18,7 +18,7 @@ internal static class ObjectExtensions
                 WriteIndented = true
             });
         }
-        
+
         Console.WriteLine($"[{@object?.GetType().Name}]:\r\n{output}");
         return @object;
     }
