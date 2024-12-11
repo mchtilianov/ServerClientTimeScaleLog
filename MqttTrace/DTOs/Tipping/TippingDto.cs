@@ -1,4 +1,4 @@
-﻿namespace Proton.Dto;
+﻿namespace MqttTrace.DTOs.Tipping;
 
 public sealed class TippingDto // : IProductLotIdProvider
 {
